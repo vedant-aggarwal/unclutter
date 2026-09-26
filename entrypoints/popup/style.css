@@ -302,9 +302,24 @@ input[type="password"] {
 }
 .rule input {
   accent-color: #206c53;
+  margin-top: 12px;
+  flex-shrink: 0;
 }
-.rule div {
+.rule-locate {
   min-width: 0;
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  padding: 8px;
+  min-height: 40px;
+}
+.rule-locate:hover:not(:disabled),
+.rule-locate:focus-visible {
+  background: #e0f3e9;
+}
+.rule-locate:active:not(:disabled) {
+  background: #cce9da;
 }
 .rule strong {
   font-size: 11px;
@@ -372,6 +387,13 @@ footer > span:first-child {
   }
   .rule code {
     color: #a0aa97;
+  }
+  .rule-locate:hover:not(:disabled),
+  .rule-locate:focus-visible {
+    background: #304b3c;
+  }
+  .rule-locate:active:not(:disabled) {
+    background: #3c604b;
   }
   #error {
     background: #442922;

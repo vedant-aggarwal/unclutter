@@ -30,6 +30,8 @@ This is [Vedant Aggarwal's fork](https://github.com/vedant-aggarwal/unclutter) o
 
 No API key is bundled. You need provider credits and Jev access. Manual analysis incurs API charges; saved rules apply locally without another model request. **On page visit** is optional and makes paid requests for new templates. It is off by default.
 
+In **Hidden elements**, hover over a rule to temporarily reveal and highlight its target without scrolling. Click its name to scroll to the target; repeat to cycle through matching blocks. The checkbox alone changes hide/show. Moving away ends a hover preview; a clicked preview stays until another selection, Escape, or closing the popup. Previewing makes no API requests and never saves a visibility change.
+
 To upgrade an existing unpacked install, replace the files in the same folder, click **Reload** on its extension card, and refresh website tabs. Keys/settings remain in browser storage. Existing enabled templates gain local ad discovery automatically; no repeat analysis is needed for newly supported structural ads. Paused templates and keep-visible choices remain respected. The **Keep removing ads as they load** rule controls ongoing detection.
 
 ## Build from source

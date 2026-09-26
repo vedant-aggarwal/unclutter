@@ -41,6 +41,7 @@ export function isCookieNotice(el: Element): boolean {
 }
 
 export function isProtected(el: Element): boolean {
+  if (el.closest("[data-unclutter-ui]")) return true;
   const lazyFeed = '[id^="taboola-"]:not(.tbl-feed-card),.tbl-feed-container';
   if (el.matches(lazyFeed) || el.querySelector(lazyFeed)) return true;
   // A native feed may mix sponsored cards with real publisher stories.
@@ -244,6 +245,8 @@ export function collapseTargets(roots: Element[], keepVisible = new Set<Element>
 
 type SavedStyle = { value: string; priority: string; applied: string; appliedPriority: string };
 export function createCleaner(doc: Document) {
+  let lastRules: Rule[] = [];
+  let previewTargets: Element[] = [];
   const attribute = `data-unclutter-${crypto.randomUUID().replaceAll("-", "")}`;
   const style = doc.createElement("style");
   style.textContent = `[${attribute}] { display: none !important; min-height: 0 !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }`;
@@ -284,15 +287,19 @@ export function createCleaner(doc: Document) {
     }
   };
   const restore = () => {
+    previewTargets = [];
+    lastRules = [];
     for (const el of marked) el.removeAttribute(attribute);
     marked.clear();
     for (const [el, props] of overrides) for (const property of props.keys()) release(el, property);
     style.remove();
   };
   const apply = (rules: Rule[]) => {
-    const keepVisible = new Set(
-      rules.filter((r) => !r.enabled).flatMap((r) => matchingElements(doc, r.selector)),
-    );
+    lastRules = rules;
+    const keepVisible = new Set([
+      ...previewTargets,
+      ...rules.filter((r) => !r.enabled).flatMap((r) => matchingElements(doc, r.selector)),
+    ]);
     const roots = [
       ...new Set(
         rules
@@ -358,5 +365,12 @@ export function createCleaner(doc: Document) {
       (el) => ![...next].some((parent) => parent !== el && parent.contains(el)),
     ).length;
   };
-  return { restore, apply };
+  return {
+    restore,
+    apply,
+    preview(targets: Element[]) {
+      previewTargets = targets;
+      return apply(lastRules);
+    },
+  };
 }

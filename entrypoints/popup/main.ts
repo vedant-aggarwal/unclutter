@@ -31,6 +31,29 @@ let working = false;
 let savedProvider: Provider = "vercel";
 let current: (PageState & { busy: boolean; error: string | null }) | null = null;
 let poll: ReturnType<typeof setTimeout> | undefined;
+let previewPort: ReturnType<typeof browser.tabs.connect> | undefined;
+let pinnedPreview: string | null = null;
+const clearPreview = () => {
+  pinnedPreview = null;
+  previewPort?.postMessage({ clear: true });
+};
+function locateRule(selector: string, scroll = false) {
+  if (tabId === undefined) return;
+  if (!previewPort) {
+    previewPort = browser.tabs.connect(tabId, { name: "unclutter-preview", frameId: 0 });
+    previewPort.onDisconnect.addListener(() => {
+      previewPort = undefined;
+    });
+    previewPort.onMessage.addListener((result: { count: number; index: number }) => {
+      get("notice").textContent = result.count
+        ? `Preview ${result.index} of ${result.count}. Click again for the next match. Checkbox changes hide/show.`
+        : "This rule has no matching element on the current page.";
+      get("notice").hidden = false;
+    });
+  }
+  pinnedPreview = scroll ? selector : null;
+  previewPort.postMessage({ selector, scroll });
+}
 
 async function request<T>(message: object): Promise<T> {
   return unwrap((await browser.runtime.sendMessage(message)) as Reply<T>);
@@ -102,7 +125,7 @@ function render() {
     rules.append(empty);
   }
   for (const rule of profile?.rules ?? []) {
-    const label = document.createElement("label");
+    const label = document.createElement("div");
     label.className = "rule";
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -113,7 +136,15 @@ function render() {
       "aria-label",
       liveAds ? "Hide verified ads as they load" : `Hide ${rule.selector}`,
     );
-    const info = document.createElement("div");
+    const info = document.createElement("button");
+    info.type = "button";
+    info.className = "rule-locate";
+    info.disabled = !!busy;
+    info.title = "Hover to preview without scrolling. Click to scroll to this element.";
+    info.setAttribute(
+      "aria-label",
+      liveAds ? "Locate verified ads on page" : `Locate ${rule.selector} on page`,
+    );
     const title = document.createElement("strong");
     title.textContent = liveAds ? "Keep removing ads as they load" : rule.category;
     const selector = document.createElement("code");
@@ -121,6 +152,19 @@ function render() {
     info.append(title, selector);
     label.append(checkbox, info);
     rules.append(label);
+    label.addEventListener("pointerenter", () => {
+      if (!busy) locateRule(rule.selector);
+    });
+    label.addEventListener("pointerleave", () => {
+      if (!pinnedPreview && !label.contains(document.activeElement)) clearPreview();
+    });
+    label.addEventListener("focusin", () => {
+      if (!busy && pinnedPreview !== rule.selector) locateRule(rule.selector);
+    });
+    label.addEventListener("focusout", (event) => {
+      if (!pinnedPreview && !label.contains(event.relatedTarget as Node | null)) clearPreview();
+    });
+    info.addEventListener("click", () => locateRule(rule.selector, true));
     checkbox.addEventListener(
       "change",
       () => void act({ type: "rule", tabId, selector: rule.selector, enabled: checkbox.checked }),
@@ -167,6 +211,7 @@ async function load() {
 }
 async function act(message: object) {
   if (working) return;
+  clearPreview();
   working = true;
   errorBox.hidden = true;
   get("notice").hidden = true;
@@ -182,6 +227,9 @@ async function act(message: object) {
     render();
   }
 }
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") clearPreview();
+});
 
 analyze.addEventListener("click", () => void act({ type: "analyze", tabId }));
 toggle.addEventListener(

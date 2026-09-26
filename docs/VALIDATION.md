@@ -44,4 +44,8 @@ Run `bun run check` for the full suite. Live tests are intentionally separate fr
 
 ## Limits still open
 
+### Rule preview (0.4.1)
+
+Chrome exercised the actual popup UI and production cleaner/preview modules on a local two-ad fixture, with only the extension messaging transport mocked. Hover revealed the hidden target with an outline while scrollY stayed at 450. Clicking scrolled to the first target; another click selected the second. Neither click changed the saved rule. The separate checkbox changed hide/show once and cleared the preview. Automated coverage checks collapsed ancestors, sibling isolation, mutation reapplication, missing/protected/removed targets, unchanged rule data, and restoration. All 34 tests pass. Native popup-to-content port teardown is implemented but not verified in an installed browser extension in this tool session.
+
 Unknown ad vendors and layouts, closed shadow DOM, unsupported native-ad formats and in-video ads need separate work. The detector is conservative by design and does not promise every ad on every platform. Supported slots and Taboola paid cards are discovered locally after analysis; unsupported markup may still require re-analysis or a detector improvement. Network requests and consent decisions are unchanged.

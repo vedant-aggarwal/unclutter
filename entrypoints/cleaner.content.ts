@@ -2,6 +2,7 @@ import { browser } from "wxt/browser";
 import { collectCandidates, createCleaner } from "../lib/dom";
 import { pageContext } from "../lib/page-context";
 import { watchPage } from "../lib/watch-page";
+import { createRulePreview } from "../lib/rule-preview";
 import { ANALYSIS_VERSION, unwrap, type PageState, type Profile, type Reply } from "../lib/model";
 
 export default defineContentScript({
@@ -9,6 +10,32 @@ export default defineContentScript({
   runAt: "document_idle",
   main(ctx) {
     const cleaner = createCleaner(document);
+    const preview = createRulePreview(document, cleaner);
+    const connectPreview = (port: ReturnType<typeof browser.runtime.connect>) => {
+      if (
+        port.name !== "unclutter-preview" ||
+        port.sender?.id !== browser.runtime.id ||
+        port.sender?.url !== browser.runtime.getURL("/popup.html")
+      )
+        return;
+      port.onMessage.addListener(
+        (message: { selector?: unknown; scroll?: unknown; clear?: unknown }) => {
+          if (message.clear === true) {
+            preview.clear();
+            return;
+          }
+          if (
+            typeof message.selector !== "string" ||
+            !state.profile?.rules.some((r) => r.selector === message.selector)
+          )
+            return;
+          const result = preview.show(message.selector, message.scroll === true);
+          port.postMessage({ ...result, selector: message.selector });
+        },
+      );
+      port.onDisconnect.addListener(() => preview.clear());
+    };
+    browser.runtime.onConnect.addListener(connectPreview);
     let state: PageState = {
       context: pageContext(document, location.href),
       profile: null,
@@ -56,6 +83,7 @@ export default defineContentScript({
       const version = ++revision;
       const context = pageContext(document, location.href);
       if (context.key !== state.context.key || lastUrl !== location.href) {
+        preview.clear();
         cleaner.restore();
         state.hiddenCount = 0;
       }
@@ -96,6 +124,7 @@ export default defineContentScript({
       const count = cleaner.apply(
         state.enabled && state.profile?.enabled ? state.profile.rules : [],
       );
+      preview.update();
       if (count !== state.hiddenCount) {
         state.hiddenCount = count;
         void browser.runtime
@@ -110,6 +139,7 @@ export default defineContentScript({
       clearTimeout(autoTimer);
       autoPendingKey = null;
       revision++;
+      preview.clear();
       cleaner.restore();
       state.hiddenCount = 0;
       watcher.schedule();
@@ -141,6 +171,8 @@ export default defineContentScript({
       revision++;
       clearTimeout(autoTimer);
       watcher.stop();
+      preview.dispose();
+      browser.runtime.onConnect.removeListener(connectPreview);
       cleaner.restore();
       browser.runtime.onMessage.removeListener(listener);
     });
