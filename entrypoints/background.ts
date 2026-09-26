@@ -7,6 +7,7 @@ import {
   POLICY_VERSION,
   ANALYSIS_VERSION,
   shouldAutoAnalyze,
+  withLiveAds,
   profileSchema,
   snapshotSchema,
   unwrap,
@@ -75,7 +76,7 @@ export default defineBackground(() => {
     return parsed.success &&
       parsed.data.version === POLICY_VERSION &&
       parsed.data.origin === context.origin
-      ? parsed.data
+      ? { ...parsed.data, rules: withLiveAds(parsed.data.rules) }
       : null;
   };
   const badge = async (tabId: number, state?: PageState, error = false) => {
@@ -140,7 +141,7 @@ export default defineBackground(() => {
       // must not create a retry loop across navigation or another tab.
       await browser.storage.local.set({ [attemptKey]: { startedAt: Date.now(), error: null } });
       await badge(tabId);
-      const rules = await evaluate(snapshot, config.apiKey, config.provider);
+      let rules = await evaluate(snapshot, config.apiKey, config.provider);
       const latestConfig = await settings();
       if (!latestConfig.enabled || (automatic && latestConfig.mode !== "auto")) return;
       const current = snapshotSchema.parse(await send<Snapshot>(tabId, "snapshot"));
@@ -150,9 +151,13 @@ export default defineBackground(() => {
       if (JSON.stringify(latest) !== JSON.stringify(before))
         throw new Error("Rules changed during analysis. Your edits were kept; retry if needed.");
       // Preserve individual keep-visible choices when re-evaluating a template.
-      for (const rule of rules)
-        if (before?.rules.some((old) => old.selector === rule.selector && !old.enabled))
-          rule.enabled = false;
+      const kept = before?.rules.filter((rule) => !rule.enabled) ?? [];
+      rules = withLiveAds(
+        [
+          ...kept,
+          ...rules.filter((rule) => !kept.some((old) => old.selector === rule.selector)),
+        ].slice(0, 60),
+      );
       const next: Profile = {
         ...snapshot.context,
         enabled: before?.enabled ?? true,

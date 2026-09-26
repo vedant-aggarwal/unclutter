@@ -1,5 +1,11 @@
 import { browser } from "wxt/browser";
-import { ANALYSIS_VERSION, unwrap, type PageState, type Reply } from "../../lib/model";
+import {
+  ANALYSIS_VERSION,
+  LIVE_ADS_SELECTOR,
+  unwrap,
+  type PageState,
+  type Reply,
+} from "../../lib/model";
 import {
   providerLabel,
   providerKeyLabel,
@@ -102,12 +108,16 @@ function render() {
     checkbox.type = "checkbox";
     checkbox.checked = rule.enabled;
     checkbox.disabled = !!busy;
-    checkbox.setAttribute("aria-label", `Hide ${rule.selector}`);
+    const liveAds = rule.selector === LIVE_ADS_SELECTOR;
+    checkbox.setAttribute(
+      "aria-label",
+      liveAds ? "Hide verified ads as they load" : `Hide ${rule.selector}`,
+    );
     const info = document.createElement("div");
     const title = document.createElement("strong");
-    title.textContent = rule.category;
+    title.textContent = liveAds ? "Keep removing ads as they load" : rule.category;
     const selector = document.createElement("code");
-    selector.textContent = rule.selector;
+    selector.textContent = liveAds ? "Local detection · no extra AI calls" : rule.selector;
     info.append(title, selector);
     label.append(checkbox, info);
     rules.append(label);

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Provider } from "./providers";
 
 export const POLICY_VERSION = 1;
-export const ANALYSIS_VERSION = 2;
+export const ANALYSIS_VERSION = 3;
 export const categories = [
   "keep",
   "ad",
@@ -17,8 +17,25 @@ export const ruleSchema = z.object({
   selector: z.string().min(1).max(400),
   category: z.enum(categories),
   enabled: z.boolean(),
+  guard: z.literal("ad-container").optional(),
 });
 export type Rule = z.infer<typeof ruleSchema>;
+// Internal operation, not a page-authored CSS selector. Keeps discovering
+// structurally verified slots after the single AI analysis has finished.
+export const LIVE_ADS_SELECTOR = "unclutter:verified-ads";
+export function withLiveAds(rules: Rule[]): Rule[] {
+  if (rules.some((rule) => rule.selector === LIVE_ADS_SELECTOR)) return rules;
+  return [
+    ...rules.filter((rule) => !rule.enabled),
+    {
+      selector: LIVE_ADS_SELECTOR,
+      category: "ad" as const,
+      enabled: true,
+      guard: "ad-container" as const,
+    },
+    ...rules.filter((rule) => rule.enabled),
+  ].slice(0, 60);
+}
 export const profileSchema = z.object({
   key: z.string(),
   label: z.string(),
@@ -46,6 +63,7 @@ export const candidateSchema = z.object({
   text: z.string().max(450),
   position: z.string().max(30),
   count: z.number().int().min(1).max(20),
+  adEvidence: z.array(z.string().max(100)).max(6).optional(),
 });
 export type Candidate = z.infer<typeof candidateSchema>;
 export const snapshotSchema = z.object({

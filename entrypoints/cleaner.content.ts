@@ -1,6 +1,7 @@
 import { browser } from "wxt/browser";
 import { collectCandidates, createCleaner } from "../lib/dom";
 import { pageContext } from "../lib/page-context";
+import { watchPage } from "../lib/watch-page";
 import { ANALYSIS_VERSION, unwrap, type PageState, type Profile, type Reply } from "../lib/model";
 
 export default defineContentScript({
@@ -15,7 +16,6 @@ export default defineContentScript({
       hiddenCount: 0,
     };
     let revision = 0;
-    let timeout: number | undefined;
     let lastUrl = location.href;
     let autoTimer: number | undefined;
     let autoPendingKey: string | null = null;
@@ -82,16 +82,26 @@ export default defineContentScript({
       void sync().catch(() => {
         cleaner.restore();
       });
-    const schedule = () => {
-      clearTimeout(timeout);
-      timeout = ctx.setTimeout(safelySync, 180);
-    };
-    const observer = new MutationObserver(schedule);
-    observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["class", "id", "data-testid", "data-component", "content", "style"],
+    const watcher = watchPage(document, () => {
+      if (ctx.isInvalid) return;
+      if (
+        lastUrl !== location.href ||
+        pageContext(document, location.href).key !== state.context.key
+      ) {
+        safelySync();
+        return;
+      }
+      // DOM changes use only cached rules and local structural detection.
+      // No snapshot/model request, and no storage round trip on every mutation.
+      const count = cleaner.apply(
+        state.enabled && state.profile?.enabled ? state.profile.rules : [],
+      );
+      if (count !== state.hiddenCount) {
+        state.hiddenCount = count;
+        void browser.runtime
+          .sendMessage({ type: "sync", context: state.context, hiddenCount: count })
+          .catch(() => undefined);
+      }
     });
     ctx.addEventListener(document, "visibilitychange", () => {
       if (document.visibilityState === "visible") safelySync();
@@ -102,7 +112,7 @@ export default defineContentScript({
       revision++;
       cleaner.restore();
       state.hiddenCount = 0;
-      schedule();
+      watcher.schedule();
     });
     const listener = (
       message: { type?: string },
@@ -129,9 +139,8 @@ export default defineContentScript({
     browser.runtime.onMessage.addListener(listener);
     ctx.onInvalidated(() => {
       revision++;
-      clearTimeout(timeout);
       clearTimeout(autoTimer);
-      observer.disconnect();
+      watcher.stop();
       cleaner.restore();
       browser.runtime.onMessage.removeListener(listener);
     });
